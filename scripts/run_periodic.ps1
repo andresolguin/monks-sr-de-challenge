@@ -1,5 +1,5 @@
 param(
-    [int]$Runs = 3,
+    [int]$Runs = 12,
     [int]$IntervalSeconds = 60
 )
 
