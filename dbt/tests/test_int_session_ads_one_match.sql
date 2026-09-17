@@ -6,6 +6,4 @@ where campaign_id is not null
 group by
     user_id,
     session_id
-having
-    count(*) <> 1
-    or count(platform) <> 1
+having count(platform) > 1
