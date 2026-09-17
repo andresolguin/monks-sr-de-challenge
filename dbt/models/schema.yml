@@ -1,0 +1,326 @@
+version: 2
+
+models:
+
+  # ---------------------------------------------------------------------------
+  # Staging
+  # ---------------------------------------------------------------------------
+
+  - name: stg_google_analytics_events
+    description: >
+      Incremental staging model for Google Analytics 4 events. Cleans and
+      deduplicates raw GA4 data while using a short ingested_at lookback window
+      so late-arriving events can be reconsidered safely.
+    columns:
+      - name: user_id
+        description: Identifier of the user that generated the event.
+
+      - name: session_id
+        description: Identifier of the GA4 session.
+
+      - name: event_timestamp
+        description: Timestamp when the GA4 event occurred.
+
+      - name: event_name
+        description: Name of the GA4 event.
+
+      - name: campaign_id
+        description: Campaign identifier associated with the event when available.
+
+      - name: ingested_at
+        description: Timestamp when the event was ingested into the raw layer.
+
+
+  - name: stg_google_ads
+    description: >
+      Incremental staging model for Google Ads six-hour batches. Deduplicates
+      campaign windows and supports repeated ingestion without multiplying
+      advertising metrics.
+    columns:
+      - name: campaign_id
+        description: Google Ads campaign identifier.
+
+      - name: batch_window_start
+        description: Inclusive start timestamp of the six-hour advertising window.
+
+      - name: batch_window_end
+        description: Exclusive end timestamp of the six-hour advertising window.
+
+      - name: impressions
+        description: Number of advertising impressions for the window.
+
+      - name: clicks
+        description: Number of advertising clicks for the window.
+
+      - name: spend
+        description: Advertising spend for the window.
+
+      - name: ingested_at
+        description: Timestamp when the Ads record was ingested into the raw layer.
+
+
+  - name: stg_meta_ads
+    description: >
+      Incremental staging model for Meta Ads six-hour batches. Deduplicates
+      campaign windows and supports repeated ingestion without multiplying
+      advertising metrics.
+    columns:
+      - name: campaign_id
+        description: Meta Ads campaign identifier.
+
+      - name: batch_window_start
+        description: Inclusive start timestamp of the six-hour advertising window.
+
+      - name: batch_window_end
+        description: Exclusive end timestamp of the six-hour advertising window.
+
+      - name: impressions
+        description: Number of advertising impressions for the window.
+
+      - name: clicks
+        description: Number of advertising clicks for the window.
+
+      - name: spend
+        description: Advertising spend for the window.
+
+      - name: ingested_at
+        description: Timestamp when the Ads record was ingested into the raw layer.
+
+
+  # ---------------------------------------------------------------------------
+  # Intermediate
+  # ---------------------------------------------------------------------------
+
+  - name: int_ads_unified
+    description: >
+      Unified advertising model that standardizes Google Ads and Meta Ads into
+      a common structure for downstream attribution and campaign analysis.
+    columns:
+      - name: platform
+        description: Advertising platform, such as google_ads or meta_ads.
+
+      - name: campaign_id
+        description: Campaign identifier from the advertising platform.
+
+      - name: batch_window_start
+        description: Inclusive start timestamp of the six-hour advertising window.
+
+      - name: batch_window_end
+        description: Exclusive end timestamp of the six-hour advertising window.
+
+      - name: impressions
+        description: Advertising impressions for the campaign window.
+
+      - name: clicks
+        description: Advertising clicks for the campaign window.
+
+      - name: spend
+        description: Advertising spend for the campaign window.
+
+
+  - name: int_ga4_sessions
+    description: >
+      One row per GA4 session with campaign attribution based on a selected
+      landing_page event. campaign_id and landing_timestamp are taken from the
+      same event to avoid inconsistent attribution.
+    columns:
+      - name: user_id
+        description: User identifier.
+
+      - name: session_id
+        description: Session identifier.
+
+      - name: campaign_id
+        description: Campaign identifier selected from the landing_page event.
+
+      - name: landing_timestamp
+        description: Timestamp of the same landing_page event used for attribution.
+
+
+  - name: int_ga4_session_metrics
+    description: >
+      Aggregates GA4 behavioral metrics at session level, including conversions,
+      purchases, and purchase revenue.
+    columns:
+      - name: user_id
+        description: User identifier.
+
+      - name: session_id
+        description: Session identifier.
+
+      - name: conversions
+        description: Number of source events marked as conversions in the session.
+
+      - name: purchases
+        description: Number of purchase events in the session.
+
+      - name: revenue
+        description: Revenue derived from purchase event values in the session.
+
+
+  - name: int_ga4_campaign_window_metrics
+    description: >
+      Aggregates attributed GA4 session activity by campaign and six-hour
+      advertising window independently of whether the corresponding Ads batch
+      has already arrived.
+    columns:
+      - name: platform
+        description: Advertising platform inferred for the attributed campaign.
+
+      - name: campaign_id
+        description: Campaign identifier attributed to the GA4 session.
+
+      - name: ads_date
+        description: Calendar date of the six-hour advertising window.
+
+      - name: batch_window_start
+        description: Inclusive start of the calculated six-hour window.
+
+      - name: batch_window_end
+        description: Exclusive end of the calculated six-hour window.
+
+      - name: sessions
+        description: Number of attributed GA4 sessions in the window.
+
+      - name: conversions
+        description: Number of conversions attributed to the window.
+
+      - name: purchases
+        description: Number of purchases attributed to the window.
+
+      - name: revenue
+        description: Purchase revenue attributed to the window.
+
+
+  - name: int_session_ads
+    description: >
+      Associates GA4 sessions with at most one matching Ads campaign window.
+      A session may temporarily have no Ads match while the corresponding
+      six-hour batch is still pending.
+    columns:
+      - name: user_id
+        description: User identifier.
+
+      - name: session_id
+        description: Session identifier.
+
+      - name: campaign_id
+        description: Campaign identifier associated with the session.
+
+      - name: landing_timestamp
+        description: Timestamp used to assign the session to an Ads window.
+
+      - name: platform
+        description: Advertising platform when a matching Ads record is available.
+
+      - name: batch_window_start
+        description: Start of the matched six-hour Ads window.
+
+      - name: batch_window_end
+        description: End of the matched six-hour Ads window.
+
+
+  # ---------------------------------------------------------------------------
+  # Marts
+  # ---------------------------------------------------------------------------
+
+  - name: fct_campaign_performance
+    description: >
+      Final paid campaign performance mart at platform, campaign, and six-hour
+      window grain. Combines advertising metrics with attributed GA4 activity
+      while preserving GA4 windows whose Ads batch has not arrived yet.
+    columns:
+      - name: platform
+        description: Advertising platform.
+
+      - name: date
+        description: Advertising date.
+
+      - name: campaign_id
+        description: Campaign identifier.
+
+      - name: campaign_name
+        description: Campaign name when supplied by the Ads source.
+
+      - name: batch_window_start
+        description: Inclusive start of the six-hour reporting window.
+
+      - name: batch_window_end
+        description: Exclusive end of the six-hour reporting window.
+
+      - name: impressions
+        description: Advertising impressions. NULL while Ads is pending.
+
+      - name: clicks
+        description: Advertising clicks. NULL while Ads is pending.
+
+      - name: spend
+        description: Advertising spend. NULL while Ads is pending.
+
+      - name: sessions
+        description: Number of attributed GA4 sessions.
+
+      - name: conversions
+        description: Number of attributed conversion events.
+
+      - name: purchases
+        description: Number of attributed purchase events.
+
+      - name: revenue
+        description: Attributed purchase revenue.
+
+      - name: cpc
+        description: >
+          Cost per click calculated as spend / clicks. NULL when the denominator
+          or required Ads data is unavailable.
+
+      - name: cpa
+        description: >
+          Cost per conversion calculated as spend / conversions. NULL when the
+          denominator or required Ads data is unavailable.
+
+      - name: roi
+        description: >
+          Advertising return approximation calculated as
+          (revenue - spend) / spend. This is not company net profit.
+
+      - name: data_status
+        description: >
+          Data completeness state. pending_ads means GA4 activity exists before
+          its Ads batch arrives; ads_available means the matching Ads batch exists.
+
+
+  - name: fct_acquisition_performance
+    description: >
+      Session-level acquisition mart that preserves every GA4 session, including
+      sessions without an identifiable campaign.
+    columns:
+      - name: user_id
+        description: User identifier.
+
+      - name: session_id
+        description: Session identifier.
+
+      - name: landing_timestamp
+        description: Timestamp of the selected landing_page event.
+
+      - name: campaign_id
+        description: Campaign identifier when one can be attributed.
+
+      - name: platform
+        description: Advertising platform when identifiable from the campaign.
+
+      - name: attribution_status
+        description: >
+          paid_campaign when a campaign is identifiable, or unattributed when
+          no campaign identifier is available. Unattributed is intentionally not
+          interpreted as organic or direct.
+
+      - name: conversions
+        description: Number of conversions generated by the session.
+
+      - name: purchases
+        description: Number of purchases generated by the session.
+
+      - name: revenue
+        description: Purchase revenue generated by the session.
