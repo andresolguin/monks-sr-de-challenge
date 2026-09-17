@@ -1,7 +1,22 @@
+{{ config(
+    materialized='incremental',
+    unique_key=['campaign_id', 'date', 'batch_window_start'],
+    incremental_strategy='delete+insert'
+) }}
+
 with source_data as (
 
     select *
     from {{ source('raw', 'meta_ads') }}
+
+    {% if is_incremental() %}
+        where ingested_at >= (
+            select
+                coalesce(max(ingested_at), '1900-01-01'::timestamp)
+                - interval '1 minute'
+            from {{ this }}
+        )
+    {% endif %}
 
 )
 
