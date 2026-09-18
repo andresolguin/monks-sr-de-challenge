@@ -11,6 +11,70 @@ It consumes only the raw PostgreSQL tables provided by the challenge emulator an
 - PostgreSQL
 - PowerShell for periodic execution simulation
 
+
+## Installation
+
+From the repository root, create and activate a Python virtual environment.
+
+### Windows PowerShell
+
+```powershell
+python -m venv .venv
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+Install the required dbt versions:
+
+```powershell
+pip install -r requirements.txt
+```
+
+Configure the dbt profile using `dbt/profiles.yml.example` as a reference.
+
+The project expects the PostgreSQL connection settings required by the challenge environment.
+
+Validate the installation from the `dbt` directory:
+
+```powershell
+dbt debug
+```
+
+## Restarting the Challenge Lab
+
+From the repository root, start the Docker environment with:
+
+```powershell
+docker compose up -d
+```
+
+The challenge emulator loads the historical May dataset and then progressively replays June data.
+
+To restart only the emulator:
+
+```powershell
+docker compose restart emulator
+```
+
+Restarting the emulator resets the raw challenge data, but existing incremental dbt staging tables may still contain rows from the previous replay.
+
+For a clean replay validation, rebuild the staging models from the current raw state:
+
+```powershell
+cd dbt
+dbt run --full-refresh --select stg_google_analytics_events stg_google_ads stg_meta_ads
+```
+
+After that, normal incremental execution can continue with:
+
+```powershell
+dbt build
+```
+
+For partial-data testing, run dbt while the replay is still in progress.
+
+For final-state validation, allow the replay to complete and run `dbt build` again.
+
 ## Data Sources
 
 The project reads from the following raw tables:
@@ -214,6 +278,7 @@ dbt test
 The project includes behavioral and reconciliation tests covering:
 
 - GA4 duplicate removal
+- late-arriving GA4 events propagate to staging without duplication
 - Google Ads duplicate advertising windows
 - Meta Ads duplicate advertising windows
 - at most one Ads match per GA4 session
