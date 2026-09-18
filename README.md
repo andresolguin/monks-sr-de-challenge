@@ -4,6 +4,12 @@ The business brief and expected deliverables are in [ENUNCIADO.md](ENUNCIADO.md)
 
 This README only covers how to start the local lab (Postgres + emulator).
 
+## Deliverables
+
+- [Deliverable A — GCP Architecture Design](docs/Deliverable_A_GCP_Architecture.pdf)
+- [Deliverable B — Business Analysis](docs/business_answers.md)
+- Deliverable B dbt implementation: [`dbt/`](dbt/)
+
 ## Requirements
 
 - Docker Desktop
